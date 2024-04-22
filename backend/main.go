@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 
+	containertypes "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/sirupsen/logrus"
@@ -54,6 +58,27 @@ func listen(path string) (net.Listener, error) {
 }
 
 func hello(ctx echo.Context) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		panic(err)
+	}
+	defer cli.Close()
+
+	ctxx := context.Background()
+	containers, err := cli.ContainerList(ctxx, containertypes.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, container := range containers {
+		fmt.Print("Stopping container ", container.ID[:10], "... ")
+		noWaitTimeout := 0 // to not wait for the container to exit gracefully
+		if err := cli.ContainerStop(ctxx, container.ID, containertypes.StopOptions{Timeout: &noWaitTimeout}); err != nil {
+			panic(err)
+		}
+		fmt.Println("Success")
+	}
+
 	return ctx.JSON(http.StatusOK, HTTPMessageBody{Message: "hello"})
 }
 
